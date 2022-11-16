@@ -1,10 +1,6 @@
 package com.example.notifyme;
 
-import androidx.appcompat.app.AppCompatActivity;
-import androidx.core.app.NotificationCompat;
-
 import android.app.Activity;
-import android.app.Application;
 import android.app.Notification;
 import android.app.NotificationChannel;
 import android.app.NotificationManager;
@@ -18,8 +14,6 @@ import android.graphics.BitmapFactory;
 import android.graphics.Color;
 import android.os.Build;
 import android.os.Bundle;
-import android.util.Log;
-import android.view.CollapsibleActionView;
 import android.view.View;
 import android.widget.Button;
 
@@ -33,12 +27,19 @@ public class MainActivity extends Activity {
     private static final int NOTIFICATION_ID = 0;
     private static final String ACTION_UPDATE_NOTIFICATION =
             "com.example.android.notifyme.ACTION_UPDATE_NOTIFICATION";
+    private static final String ACTION_ON_DISMISSED_NOTIFICATION =
+            "com.example.android.notifyme.ACTION_DISMISSED_NOTIFICATION";
     private NotificationReceiver mReceiver = new NotificationReceiver();
-    public class NotificationReceiver extends BroadcastReceiver {
 
+    public class NotificationReceiver extends BroadcastReceiver {
         @Override
         public void onReceive(Context context, Intent intent) {
-            updateNotification();
+            String action = intent.getAction();
+            if(action == ACTION_UPDATE_NOTIFICATION) {
+                updateNotification();
+            }else if(action == ACTION_ON_DISMISSED_NOTIFICATION){
+                cancelNotification();
+            }
         }
     }
 
@@ -73,21 +74,27 @@ public class MainActivity extends Activity {
                 cancelNotification();
             }
         });
+        IntentFilter intentFilter = new IntentFilter();
+        intentFilter.addAction(ACTION_UPDATE_NOTIFICATION);
+        intentFilter.addAction(ACTION_ON_DISMISSED_NOTIFICATION);
         createNotificationChannel();
+        registerReceiver(mReceiver, intentFilter);
+
         setNotificationButtonState(true, false, false);
-        registerReceiver(mReceiver, new IntentFilter(ACTION_UPDATE_NOTIFICATION));
     }
 
     public void sendNotification() {
         Intent updateIntent = new Intent(ACTION_UPDATE_NOTIFICATION);
         PendingIntent updatePendingIntent = PendingIntent.getBroadcast
-                (this, NOTIFICATION_ID, updateIntent, PendingIntent.FLAG_IMMUTABLE);
-
+                (this, NOTIFICATION_ID, updateIntent, PendingIntent.FLAG_MUTABLE);
+        Intent dismissIntent = new Intent(ACTION_ON_DISMISSED_NOTIFICATION);
+        PendingIntent dismissPendingIntent = PendingIntent.getBroadcast
+                (this, NOTIFICATION_ID, dismissIntent, PendingIntent.FLAG_MUTABLE);
         notifyBuilder = getNotificationBuilder();
         notifyBuilder.addAction(R.drawable.ic_update, "Update Notification", updatePendingIntent);
+        notifyBuilder.setDeleteIntent(dismissPendingIntent);
 
         mNotifyManager.notify(NOTIFICATION_ID, notifyBuilder.build());
-
         setNotificationButtonState(false, true, true);
     }
 
@@ -98,6 +105,12 @@ public class MainActivity extends Activity {
         notifyBuilder.setStyle(new Notification.BigPictureStyle()
                 .bigPicture(androidImage)
                 .setBigContentTitle("Notification Updated!"));
+
+        Intent dismissIntent = new Intent(ACTION_ON_DISMISSED_NOTIFICATION);
+        PendingIntent dismissPendingIntent = PendingIntent.getBroadcast
+                (this, NOTIFICATION_ID, dismissIntent, PendingIntent.FLAG_MUTABLE);
+        notifyBuilder.setDeleteIntent(dismissPendingIntent);
+
         mNotifyManager.notify(NOTIFICATION_ID, notifyBuilder.build());
         setNotificationButtonState(false, false, true);
     }
@@ -123,13 +136,11 @@ public class MainActivity extends Activity {
 
     private Notification.Builder getNotificationBuilder() {
         Intent notificationIntent = new Intent(this, MainActivity.class);
-
         PendingIntent notificationPendingIntent = PendingIntent.getActivity(
                 this,
                 NOTIFICATION_ID,
                 notificationIntent,
                 PendingIntent.FLAG_MUTABLE);
-
         Notification.Builder notifyBuilder = null;
         if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
             notifyBuilder = new Notification.Builder(this, PRIMARY_CHANNEL_ID)
@@ -141,8 +152,6 @@ public class MainActivity extends Activity {
                     .setPriority(Notification.PRIORITY_HIGH)
                     .setDefaults(Notification.DEFAULT_ALL);
         }
-
-        notifyBuilder.setContentIntent(notificationPendingIntent).setAutoCancel(true);
         return notifyBuilder;
     }
 
@@ -153,5 +162,4 @@ public class MainActivity extends Activity {
         button_update.setEnabled(isUpdateEnabled);
         button_cancel.setEnabled(isCancelEnabled);
     }
-
 }
